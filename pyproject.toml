@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "schedule-tiger"
+version = "1.0.0"
+description = "ScheduleTiger – manage your schedule from the command line"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+schedule-tiger = "schedule_tiger.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
