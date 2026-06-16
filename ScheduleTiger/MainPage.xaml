@@ -37,47 +37,74 @@
                            FontAttributes="Bold"
                            FontSize="18" />
 
+                    <Label Text="Reminders alert with a heads-up pop, sound, and vibration."
+                           TextColor="#CBB98A"
+                           FontSize="13"
+                           LineBreakMode="WordWrap" />
+
                     <Button Text="Enable reminder notifications"
                             Clicked="OnEnableNotificationsClicked"
                             BackgroundColor="#D39A28"
                             TextColor="#0B0B0B"
                             FontAttributes="Bold"
+                            HeightRequest="48"
                             CornerRadius="14" />
 
-                    <Button Text="Send test notification now"
-                            Clicked="OnSendTestNotificationNowClicked"
-                            BackgroundColor="#3A2110"
-                            TextColor="#F7F2E8"
-                            CornerRadius="14" />
+                    <Border BackgroundColor="#221B0E"
+                            StrokeThickness="0"
+                            StrokeShape="RoundRectangle 12"
+                            Padding="12,8">
+                        <Label Text="{Binding StatusMessage}"
+                               TextColor="#E8D9AE"
+                               FontSize="12"
+                               LineBreakMode="WordWrap" />
+                    </Border>
 
-                    <Button Text="Test notification in 30 seconds"
-                            Clicked="OnTestNotificationClicked"
-                            BackgroundColor="#3A2110"
-                            TextColor="#F7F2E8"
-                            CornerRadius="14" />
+                    <Button Text="{Binding DiagnosticsToggleText}"
+                            Clicked="OnToggleDiagnosticsClicked"
+                            BackgroundColor="Transparent"
+                            TextColor="#A98A4A"
+                            FontSize="13"
+                            Padding="0"
+                            HorizontalOptions="Start" />
 
-                    <Button Text="Open notification settings"
-                            Clicked="OnOpenNotificationSettingsClicked"
-                            BackgroundColor="#2A2211"
-                            TextColor="#F7F2E8"
-                            CornerRadius="14" />
+                    <VerticalStackLayout Spacing="10"
+                                         IsVisible="{Binding ShowDiagnostics}">
+                        <Button Text="Send test notification now"
+                                Clicked="OnSendTestNotificationNowClicked"
+                                BackgroundColor="#2A2211"
+                                TextColor="#F7F2E8"
+                                HeightRequest="44"
+                                CornerRadius="12" />
 
-                    <Button Text="Open channel settings"
-                            Clicked="OnOpenChannelSettingsClicked"
-                            BackgroundColor="#2A2211"
-                            TextColor="#F7F2E8"
-                            CornerRadius="14" />
+                        <Button Text="Test notification in 30 seconds"
+                                Clicked="OnTestNotificationClicked"
+                                BackgroundColor="#2A2211"
+                                TextColor="#F7F2E8"
+                                HeightRequest="44"
+                                CornerRadius="12" />
 
-                    <Button Text="Open alarm permission settings"
-                            Clicked="OnOpenAlarmPermissionClicked"
-                            BackgroundColor="#2A2211"
-                            TextColor="#F7F2E8"
-                            CornerRadius="14" />
+                        <Button Text="Open notification settings"
+                                Clicked="OnOpenNotificationSettingsClicked"
+                                BackgroundColor="#1F1A0E"
+                                TextColor="#CBB98A"
+                                HeightRequest="44"
+                                CornerRadius="12" />
 
-                    <Label Text="{Binding StatusMessage}"
-                           TextColor="#CBB98A"
-                           FontSize="12"
-                           LineBreakMode="WordWrap" />
+                        <Button Text="Open channel settings"
+                                Clicked="OnOpenChannelSettingsClicked"
+                                BackgroundColor="#1F1A0E"
+                                TextColor="#CBB98A"
+                                HeightRequest="44"
+                                CornerRadius="12" />
+
+                        <Button Text="Open alarm permission settings"
+                                Clicked="OnOpenAlarmPermissionClicked"
+                                BackgroundColor="#1F1A0E"
+                                TextColor="#CBB98A"
+                                HeightRequest="44"
+                                CornerRadius="12" />
+                    </VerticalStackLayout>
                 </VerticalStackLayout>
             </Border>
 
@@ -267,6 +294,7 @@
                             BackgroundColor="#D39A28"
                             TextColor="#0B0B0B"
                             FontAttributes="Bold"
+                            HeightRequest="48"
                             CornerRadius="14" />
 
                     <Label Text="ScheduleTiger stores reminders locally on this device."

@@ -224,7 +224,7 @@ public sealed class ReminderNotificationService
         var pendingIntent = global::Android.App.PendingIntent.GetBroadcast(context, GetRequestCode(reminder.Id), intent, flags);
 
         var triggerAtMillis = new DateTimeOffset(reminder.DueDateTime).ToUnixTimeMilliseconds();
-        alarmManager.Set(global::Android.App.AlarmType.RtcWakeup, triggerAtMillis, pendingIntent);
+        ScheduleAllowWhileIdle(alarmManager, triggerAtMillis, pendingIntent);
 
         LastNotificationStatus = notificationsAllowed ? "Notification scheduled." : "Notifications blocked.";
         return notificationsAllowed;
@@ -251,7 +251,7 @@ public sealed class ReminderNotificationService
         var pendingIntent = global::Android.App.PendingIntent.GetBroadcast(context, GetRequestCode(TestRequestCode), intent, flags);
 
         var triggerAtMillis = new DateTimeOffset(scheduledAt).ToUnixTimeMilliseconds();
-        alarmManager.Set(global::Android.App.AlarmType.RtcWakeup, triggerAtMillis, pendingIntent);
+        ScheduleAllowWhileIdle(alarmManager, triggerAtMillis, pendingIntent);
         LastNotificationStatus = $"Test notification scheduled for {scheduledAt:t}";
         return true;
     }
@@ -263,6 +263,30 @@ public sealed class ReminderNotificationService
         intent.PutExtra(Platforms.Android.ReminderNotificationReceiver.ExtraTitle, title);
         intent.PutExtra(Platforms.Android.ReminderNotificationReceiver.ExtraBody, body);
         return intent;
+    }
+
+    // Schedules an alarm that still fires while the device is in Doze.
+    // Uses exact delivery only when the exact-alarm permission is already granted
+    // (API 31+), so near-future reminders alert on time without requiring
+    // SCHEDULE_EXACT_ALARM. Falls back to inexact allow-while-idle otherwise.
+    static void ScheduleAllowWhileIdle(global::Android.App.AlarmManager alarmManager, long triggerAtMillis, global::Android.App.PendingIntent pendingIntent)
+    {
+        if (OperatingSystem.IsAndroidVersionAtLeast(23))
+        {
+            var exactAllowed = !OperatingSystem.IsAndroidVersionAtLeast(31) || alarmManager.CanScheduleExactAlarms();
+            if (exactAllowed)
+            {
+                alarmManager.SetExactAndAllowWhileIdle(global::Android.App.AlarmType.RtcWakeup, triggerAtMillis, pendingIntent);
+            }
+            else
+            {
+                alarmManager.SetAndAllowWhileIdle(global::Android.App.AlarmType.RtcWakeup, triggerAtMillis, pendingIntent);
+            }
+
+            return;
+        }
+
+        alarmManager.Set(global::Android.App.AlarmType.RtcWakeup, triggerAtMillis, pendingIntent);
     }
 
     static global::Android.App.PendingIntentFlags PendingIntentFlagsForApiLevel()

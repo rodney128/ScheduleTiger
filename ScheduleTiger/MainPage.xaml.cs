@@ -16,6 +16,7 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
     TimeSpan selectedTime = DateTime.Now.AddHours(1).TimeOfDay;
     string reminderCountText = "0 reminders";
     string statusMessage = string.Empty;
+    bool showDiagnostics;
     bool initialized;
 
     public MainPage(ReminderService reminderService)
@@ -79,6 +80,20 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
         set => SetField(ref statusMessage, value);
     }
 
+    public bool ShowDiagnostics
+    {
+        get => showDiagnostics;
+        set
+        {
+            if (SetField(ref showDiagnostics, value))
+            {
+                NotifyPropertyChanged(nameof(DiagnosticsToggleText));
+            }
+        }
+    }
+
+    public string DiagnosticsToggleText => showDiagnostics ? "Hide diagnostics & tests" : "Show diagnostics & tests";
+
     protected override async void OnAppearing()
     {
         base.OnAppearing();
@@ -124,6 +139,11 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
         var granted = await reminderService.RequestNotificationPermissionAsync();
         StatusMessage = granted ? "Notifications allowed" : "Notifications blocked";
         await RefreshPermissionStatusAsync();
+    }
+
+    void OnToggleDiagnosticsClicked(object sender, EventArgs e)
+    {
+        ShowDiagnostics = !ShowDiagnostics;
     }
 
     async void OnSendTestNotificationNowClicked(object sender, EventArgs e)
