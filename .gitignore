@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+*.user
+*.csproj.user
+*.tmp
+*.apk
+*.aab
+*_private_signing/
+*.jks
+*.keystore

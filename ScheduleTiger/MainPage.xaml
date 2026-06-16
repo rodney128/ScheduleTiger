@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="ScheduleTiger.MainPage"
+             BackgroundColor="#0B0B0B">
+
+    <Grid RowDefinitions="Auto,Auto,*"
+          Padding="18,24,18,18"
+          RowSpacing="16">
+        <VerticalStackLayout Spacing="10">
+            <Image Source="tigericon.png"
+                   HeightRequest="92"
+                   WidthRequest="92"
+                   HorizontalOptions="Center"
+                   Aspect="AspectFit" />
+
+            <Label Text="ScheduleTiger"
+                   TextColor="#F0D28A"
+                   FontSize="30"
+                   FontAttributes="Bold"
+                   HorizontalTextAlignment="Center" />
+
+            <Label Text="Reminders, routines, and checklists"
+                   TextColor="#F7F2E8"
+                   FontSize="15"
+                   HorizontalTextAlignment="Center" />
+        </VerticalStackLayout>
+
+        <Border Grid.Row="1"
+                BackgroundColor="#171717"
+                Stroke="#7C5A16"
+                StrokeThickness="1"
+                Padding="16"
+                StrokeShape="RoundRectangle 18">
+            <VerticalStackLayout Spacing="12">
+                <Label Text="Add reminder"
+                       TextColor="#F0D28A"
+                       FontAttributes="Bold"
+                       FontSize="18" />
+
+                <Entry Placeholder="Title *"
+                       Text="{Binding NewTitle}"
+                       BackgroundColor="#222222"
+                       TextColor="#FFF9EF"
+                       PlaceholderColor="#A98A4A"
+                       ClearButtonVisibility="WhileEditing" />
+
+                <Editor Placeholder="Notes"
+                        Text="{Binding NewNotes}"
+                        AutoSize="TextChanges"
+                        HeightRequest="88"
+                        BackgroundColor="#222222"
+                        TextColor="#FFF9EF"
+                        PlaceholderColor="#A98A4A" />
+
+                <Grid ColumnDefinitions="*,*"
+                      ColumnSpacing="12"
+                      RowDefinitions="Auto,Auto"
+                      RowSpacing="10">
+                    <VerticalStackLayout Grid.Row="0" Grid.Column="0" Spacing="6">
+                        <Label Text="Tag"
+                               TextColor="#F7F2E8"
+                               FontSize="13" />
+                        <Picker ItemsSource="{Binding TagOptions}"
+                                SelectedItem="{Binding SelectedTag}"
+                                BackgroundColor="#222222"
+                                TextColor="#FFF9EF"
+                                TitleColor="#A98A4A" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Grid.Row="0" Grid.Column="1" Spacing="6">
+                        <Label Text="Due date"
+                               TextColor="#F7F2E8"
+                               FontSize="13" />
+                        <DatePicker Date="{Binding SelectedDate}"
+                                    BackgroundColor="#222222"
+                                    TextColor="#FFF9EF" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Grid.Row="1" Grid.ColumnSpan="2" Spacing="6">
+                        <Label Text="Due time"
+                               TextColor="#F7F2E8"
+                               FontSize="13" />
+                        <TimePicker Time="{Binding SelectedTime}"
+                                    BackgroundColor="#222222"
+                                    TextColor="#FFF9EF" />
+                    </VerticalStackLayout>
+                </Grid>
+
+                <Button Text="Add reminder"
+                        Clicked="OnAddReminderClicked"
+                        BackgroundColor="#D39A28"
+                        TextColor="#0B0B0B"
+                        FontAttributes="Bold"
+                        CornerRadius="14" />
+
+                <Label Text="ScheduleTiger stores reminders locally on this device."
+                       TextColor="#CBB98A"
+                       FontSize="12" />
+            </VerticalStackLayout>
+        </Border>
+
+        <Grid Grid.Row="2"
+              RowDefinitions="Auto,*"
+              RowSpacing="10">
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Text="Saved reminders"
+                       TextColor="#F0D28A"
+                       FontAttributes="Bold"
+                       FontSize="18" />
+                <Label Grid.Column="1"
+                       Text="{Binding ReminderCountText}"
+                       TextColor="#CBB98A"
+                       FontSize="13"
+                       VerticalTextAlignment="Center" />
+            </Grid>
+
+            <CollectionView Grid.Row="1"
+                            ItemsSource="{Binding Reminders}"
+                            SelectionMode="None">
+                <CollectionView.EmptyView>
+                    <Border BackgroundColor="#171717"
+                            Stroke="#3D2A07"
+                            StrokeThickness="1"
+                            StrokeShape="RoundRectangle 16"
+                            Padding="18">
+                        <Label Text="No reminders yet. Add the first one above."
+                               TextColor="#CBB98A"
+                               HorizontalTextAlignment="Center" />
+                    </Border>
+                </CollectionView.EmptyView>
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Border BackgroundColor="#171717"
+                                Stroke="#3D2A07"
+                                StrokeThickness="1"
+                                StrokeShape="RoundRectangle 18"
+                                Padding="14"
+                                Margin="0,0,0,12">
+                            <Grid RowDefinitions="Auto,Auto,Auto"
+                                  RowSpacing="8">
+                                <Grid ColumnDefinitions="Auto,*,Auto"
+                                      ColumnSpacing="10">
+                                    <CheckBox IsChecked="{Binding IsDone, Mode=TwoWay}"
+                                              CheckedChanged="OnReminderCheckedChanged"
+                                              Color="#D39A28"
+                                              VerticalOptions="Center" />
+
+                                    <VerticalStackLayout Grid.Column="1" Spacing="4">
+                                        <Label Text="{Binding Title}"
+                                               FontSize="18"
+                                               FontAttributes="Bold"
+                                               TextColor="#FFF9EF">
+                                            <Label.Triggers>
+                                                <DataTrigger TargetType="Label"
+                                                             Binding="{Binding IsDone}"
+                                                             Value="True">
+                                                    <Setter Property="TextColor" Value="#A0A0A0" />
+                                                    <Setter Property="TextDecorations" Value="Strikethrough" />
+                                                </DataTrigger>
+                                            </Label.Triggers>
+                                        </Label>
+
+                                        <Label Text="{Binding Notes}"
+                                               IsVisible="{Binding Notes, Converter={StaticResource StringNotEmptyConverter}}"
+                                               TextColor="#CBB98A"
+                                               FontSize="13"
+                                               LineBreakMode="TailTruncation" />
+                                    </VerticalStackLayout>
+
+                                    <Button Grid.Column="2"
+                                            Text="Delete"
+                                            Clicked="OnDeleteReminderClicked"
+                                            BackgroundColor="#3A2110"
+                                            TextColor="#F7F2E8"
+                                            CornerRadius="12"
+                                            Padding="12,8"
+                                            MinimumHeightRequest="40" />
+                                </Grid>
+
+                                <Grid Grid.Row="1"
+                                      ColumnDefinitions="Auto,Auto,*,Auto"
+                                      ColumnSpacing="8">
+                                    <Border BackgroundColor="#2A2211"
+                                            StrokeThickness="0"
+                                            StrokeShape="RoundRectangle 12"
+                                            Padding="8,4">
+                                        <Label Text="{Binding Tag}"
+                                               TextColor="#F0D28A"
+                                               FontSize="12" />
+                                    </Border>
+
+                                    <Label Grid.Column="1"
+                                           Text="{Binding DueDateDisplay}"
+                                           TextColor="#F7F2E8"
+                                           FontSize="12"
+                                           VerticalTextAlignment="Center" />
+
+                                    <Label Grid.Column="2"
+                                           Text="Overdue"
+                                           IsVisible="{Binding IsOverdue}"
+                                           TextColor="#E6A4A4"
+                                           FontSize="12"
+                                           HorizontalOptions="End"
+                                           VerticalTextAlignment="Center" />
+
+                                    <Label Grid.Column="3"
+                                           Text="Done"
+                                           IsVisible="{Binding IsDone}"
+                                           TextColor="#A8D8A0"
+                                           FontSize="12"
+                                           HorizontalOptions="End"
+                                           VerticalTextAlignment="Center" />
+                                </Grid>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </Grid>
+    </Grid>
+
+</ContentPage>
