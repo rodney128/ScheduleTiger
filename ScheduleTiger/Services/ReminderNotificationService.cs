@@ -4,16 +4,14 @@ namespace ScheduleTiger.Services;
 
 public sealed class ReminderNotificationService
 {
-    public async Task<bool> EnsurePermissionAsync()
+    public async Task<bool> RequestNotificationPermissionAsync()
     {
 #if ANDROID
         if (OperatingSystem.IsAndroidVersionAtLeast(33))
         {
             var permission = await Permissions.RequestAsync<Permissions.PostNotifications>();
-            if (permission != PermissionStatus.Granted)
-            {
-                return false;
-            }
+            EnsureChannel();
+            return permission == PermissionStatus.Granted;
         }
 
         EnsureChannel();
@@ -23,45 +21,135 @@ public sealed class ReminderNotificationService
 #endif
     }
 
-    public Task ScheduleAsync(ReminderItem reminder)
+    public Task<bool> IsNotificationPermissionGrantedAsync()
+    {
+#if ANDROID
+        return IsNotificationPermissionGrantedCoreAsync();
+#else
+        return Task.FromResult(true);
+#endif
+    }
+
+    public Task<bool> ScheduleAsync(ReminderItem reminder)
     {
         ArgumentNullException.ThrowIfNull(reminder);
 
 #if ANDROID
-        if (reminder.IsDone || reminder.DueDateTime <= DateTime.Now)
-        {
-            return Task.CompletedTask;
-        }
+        return ScheduleReminderAlarmAsync(reminder);
+#else
+        LastNotificationStatus = "Notification scheduled.";
+        return Task.FromResult(true);
+#endif
+    }
 
-        EnsureChannel();
+    public Task<bool> ScheduleTestNotificationAsync(TimeSpan delay)
+    {
+#if ANDROID
+        return ScheduleTestAlarmAsync(delay);
+#else
+        LastNotificationStatus = "Test notification scheduled.";
+        return Task.FromResult(true);
+#endif
+    }
+
+    public async Task<bool> ShowTestNotificationNowAsync()
+    {
+#if ANDROID
+        var notificationsAllowed = await IsNotificationPermissionGrantedCoreAsync();
+        if (!notificationsAllowed)
+        {
+            LastNotificationStatus = "Notifications blocked.";
+            return false;
+        }
 
         var context = global::Android.App.Application.Context ?? throw new InvalidOperationException("Android application context is unavailable.");
-        var alarmManager = (global::Android.App.AlarmManager?)context.GetSystemService(global::Android.Content.Context.AlarmService)
-            ?? throw new InvalidOperationException("AlarmManager is unavailable.");
-
-        var intent = new global::Android.Content.Intent(context, typeof(Platforms.Android.ReminderNotificationReceiver));
-        intent.PutExtra(Platforms.Android.ReminderNotificationReceiver.ExtraReminderId, reminder.Id);
-        intent.PutExtra(Platforms.Android.ReminderNotificationReceiver.ExtraTitle, reminder.Title);
-        intent.PutExtra(Platforms.Android.ReminderNotificationReceiver.ExtraBody, reminder.Title);
-
-        var pendingIntent = global::Android.App.PendingIntent.GetBroadcast(
+        Platforms.Android.ReminderNotificationReceiver.Show(
             context,
-            GetRequestCode(reminder),
-            intent,
-            global::Android.App.PendingIntentFlags.UpdateCurrent | global::Android.App.PendingIntentFlags.Immutable);
+            GetRequestCode(TestRequestCode),
+            "ScheduleTiger",
+            "Test reminder notification");
 
-        var triggerAtMillis = new DateTimeOffset(reminder.DueDateTime).ToUnixTimeMilliseconds();
-        if (OperatingSystem.IsAndroidVersionAtLeast(23))
+        LastNotificationStatus = "Test notification sent.";
+        return true;
+#else
+        await Task.CompletedTask;
+        LastNotificationStatus = "Test notification sent.";
+        return true;
+#endif
+    }
+
+    public Task OpenNotificationSettingsAsync()
+    {
+#if ANDROID
+        var context = global::Android.App.Application.Context;
+        if (context is not null)
         {
-            alarmManager.SetExactAndAllowWhileIdle(global::Android.App.AlarmType.RtcWakeup, triggerAtMillis, pendingIntent);
-        }
-        else
-        {
-            alarmManager.SetExact(global::Android.App.AlarmType.RtcWakeup, triggerAtMillis, pendingIntent);
+            var intent = new global::Android.Content.Intent(global::Android.Provider.Settings.ActionAppNotificationSettings);
+            intent.PutExtra(global::Android.Provider.Settings.ExtraAppPackage, context.PackageName);
+            intent.AddFlags(global::Android.Content.ActivityFlags.NewTask);
+            context.StartActivity(intent);
         }
 #endif
         return Task.CompletedTask;
     }
+
+    public Task OpenChannelSettingsAsync()
+    {
+#if ANDROID
+        var context = global::Android.App.Application.Context;
+        if (context is not null)
+        {
+            EnsureChannel();
+
+            global::Android.Content.Intent intent;
+            if (OperatingSystem.IsAndroidVersionAtLeast(26))
+            {
+                intent = new global::Android.Content.Intent(global::Android.Provider.Settings.ActionChannelNotificationSettings);
+                intent.PutExtra(global::Android.Provider.Settings.ExtraAppPackage, context.PackageName);
+                intent.PutExtra(global::Android.Provider.Settings.ExtraChannelId, Platforms.Android.ReminderNotificationReceiver.ChannelId);
+            }
+            else
+            {
+                intent = new global::Android.Content.Intent(global::Android.Provider.Settings.ActionAppNotificationSettings);
+                intent.PutExtra(global::Android.Provider.Settings.ExtraAppPackage, context.PackageName);
+            }
+
+            intent.AddFlags(global::Android.Content.ActivityFlags.NewTask);
+            context.StartActivity(intent);
+        }
+#endif
+        return Task.CompletedTask;
+    }
+
+    public Task OpenAlarmPermissionSettingsAsync()
+    {
+#if ANDROID
+        var context = global::Android.App.Application.Context;
+        if (context is not null)
+        {
+            var intent = new global::Android.Content.Intent(global::Android.Provider.Settings.ActionRequestScheduleExactAlarm);
+            intent.SetData(global::Android.Net.Uri.Parse($"package:{context.PackageName}"));
+            intent.AddFlags(global::Android.Content.ActivityFlags.NewTask);
+            context.StartActivity(intent);
+        }
+#endif
+        return Task.CompletedTask;
+    }
+
+    public bool CanScheduleExactAlarms()
+    {
+#if ANDROID
+        var context = global::Android.App.Application.Context;
+        var alarmManager = context is null
+            ? null
+            : (global::Android.App.AlarmManager?)context.GetSystemService(global::Android.Content.Context.AlarmService);
+        return alarmManager?.CanScheduleExactAlarms() ?? false;
+#else
+        return true;
+#endif
+    }
+
+    public string LastNotificationStatus { get; private set; } = string.Empty;
 
     public Task CancelAsync(ReminderItem reminder)
     {
@@ -77,9 +165,9 @@ public sealed class ReminderNotificationService
                 var intent = new global::Android.Content.Intent(context, typeof(Platforms.Android.ReminderNotificationReceiver));
                 var pendingIntent = global::Android.App.PendingIntent.GetBroadcast(
                     context,
-                    GetRequestCode(reminder),
+                    GetRequestCode(reminder.Id),
                     intent,
-                    global::Android.App.PendingIntentFlags.NoCreate | global::Android.App.PendingIntentFlags.Immutable);
+                    global::Android.App.PendingIntentFlags.NoCreate | PendingIntentFlagsForApiLevel());
 
                 if (pendingIntent is not null)
                 {
@@ -103,39 +191,122 @@ public sealed class ReminderNotificationService
     }
 
 #if ANDROID
-    const string ChannelId = "scheduletiger.reminders";
+    const string TestRequestCode = "scheduletiger.test.notification";
+
+    async Task<bool> IsNotificationPermissionGrantedCoreAsync()
+    {
+        if (OperatingSystem.IsAndroidVersionAtLeast(33))
+        {
+            var permission = await Permissions.CheckStatusAsync<Permissions.PostNotifications>();
+            return permission == PermissionStatus.Granted;
+        }
+
+        return true;
+    }
+
+    async Task<bool> ScheduleReminderAlarmAsync(ReminderItem reminder)
+    {
+        EnsureChannel();
+
+        var context = global::Android.App.Application.Context ?? throw new InvalidOperationException("Android application context is unavailable.");
+        var alarmManager = (global::Android.App.AlarmManager?)context.GetSystemService(global::Android.Content.Context.AlarmService)
+            ?? throw new InvalidOperationException("AlarmManager is unavailable.");
+
+        var notificationsAllowed = await IsNotificationPermissionGrantedCoreAsync();
+        if (reminder.IsDone || reminder.DueDateTime <= DateTime.Now)
+        {
+            LastNotificationStatus = notificationsAllowed ? "Reminder saved. Overdue." : "Reminder saved. Notifications blocked.";
+            return false;
+        }
+
+        var intent = CreateIntent(context, reminder.Id, reminder.Title, reminder.Notes);
+        var flags = global::Android.App.PendingIntentFlags.UpdateCurrent | PendingIntentFlagsForApiLevel();
+        var pendingIntent = global::Android.App.PendingIntent.GetBroadcast(context, GetRequestCode(reminder.Id), intent, flags);
+
+        var triggerAtMillis = new DateTimeOffset(reminder.DueDateTime).ToUnixTimeMilliseconds();
+        alarmManager.Set(global::Android.App.AlarmType.RtcWakeup, triggerAtMillis, pendingIntent);
+
+        LastNotificationStatus = notificationsAllowed ? "Notification scheduled." : "Notifications blocked.";
+        return notificationsAllowed;
+    }
+
+    async Task<bool> ScheduleTestAlarmAsync(TimeSpan delay)
+    {
+        EnsureChannel();
+
+        var notificationsAllowed = await IsNotificationPermissionGrantedCoreAsync();
+        if (!notificationsAllowed)
+        {
+            LastNotificationStatus = "Notifications blocked.";
+            return false;
+        }
+
+        var context = global::Android.App.Application.Context ?? throw new InvalidOperationException("Android application context is unavailable.");
+        var alarmManager = (global::Android.App.AlarmManager?)context.GetSystemService(global::Android.Content.Context.AlarmService)
+            ?? throw new InvalidOperationException("AlarmManager is unavailable.");
+
+        var scheduledAt = DateTime.Now.Add(delay);
+        var intent = CreateIntent(context, TestRequestCode, "ScheduleTiger", "Test reminder notification");
+        var flags = global::Android.App.PendingIntentFlags.UpdateCurrent | PendingIntentFlagsForApiLevel();
+        var pendingIntent = global::Android.App.PendingIntent.GetBroadcast(context, GetRequestCode(TestRequestCode), intent, flags);
+
+        var triggerAtMillis = new DateTimeOffset(scheduledAt).ToUnixTimeMilliseconds();
+        alarmManager.Set(global::Android.App.AlarmType.RtcWakeup, triggerAtMillis, pendingIntent);
+        LastNotificationStatus = $"Test notification scheduled for {scheduledAt:t}";
+        return true;
+    }
+
+    static global::Android.Content.Intent CreateIntent(global::Android.Content.Context context, string reminderId, string title, string body)
+    {
+        var intent = new global::Android.Content.Intent(context, typeof(Platforms.Android.ReminderNotificationReceiver));
+        intent.PutExtra(Platforms.Android.ReminderNotificationReceiver.ExtraReminderId, reminderId);
+        intent.PutExtra(Platforms.Android.ReminderNotificationReceiver.ExtraTitle, title);
+        intent.PutExtra(Platforms.Android.ReminderNotificationReceiver.ExtraBody, body);
+        return intent;
+    }
+
+    static global::Android.App.PendingIntentFlags PendingIntentFlagsForApiLevel()
+    {
+        return OperatingSystem.IsAndroidVersionAtLeast(23)
+            ? global::Android.App.PendingIntentFlags.Immutable
+            : 0;
+    }
 
     static void EnsureChannel()
     {
-        if (OperatingSystem.IsAndroidVersionAtLeast(26))
+        var context = global::Android.App.Application.Context;
+        if (context is not null)
         {
-            var context = global::Android.App.Application.Context;
-            if (context is null)
-            {
-                return;
-            }
-
-            var manager = (global::Android.App.NotificationManager?)context.GetSystemService(global::Android.Content.Context.NotificationService);
-            if (manager is null)
-            {
-                return;
-            }
-
-            var channel = manager.GetNotificationChannel(ChannelId);
-            if (channel is null)
-            {
-                channel = new global::Android.App.NotificationChannel(ChannelId, "ScheduleTiger reminders", global::Android.App.NotificationImportance.Default)
-                {
-                    Description = "Reminders for ScheduleTiger",
-                };
-                manager.CreateNotificationChannel(channel);
-            }
+            Platforms.Android.ReminderNotificationReceiver.EnsureChannel(context);
         }
     }
 
-    static int GetRequestCode(ReminderItem reminder)
+    private static int GetRequestCode(string value)
     {
-        return unchecked((int)uint.Parse(reminder.Id[..8], System.Globalization.NumberStyles.HexNumber));
+        if (int.TryParse(value, out var requestCode))
+        {
+            return requestCode;
+        }
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return 0;
+        }
+
+        unchecked
+        {
+            const int offsetBasis = unchecked((int)2166136261);
+            const int prime = 16777619;
+            int hash = offsetBasis;
+
+            foreach (char c in value)
+            {
+                hash ^= c;
+                hash *= prime;
+            }
+
+            return hash;
+        }
     }
 #endif
 }

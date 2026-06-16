@@ -1,5 +1,7 @@
+using System.Globalization;
 using Android.App;
 using Android.Content;
+using Android.Media;
 using AndroidX.Core.App;
 
 namespace ScheduleTiger.Platforms.Android;
@@ -10,7 +12,14 @@ public sealed class ReminderNotificationReceiver : BroadcastReceiver
     public const string ExtraReminderId = "scheduleTiger.reminderId";
     public const string ExtraTitle = "scheduleTiger.title";
     public const string ExtraBody = "scheduleTiger.body";
-    const string ChannelId = "scheduletiger.reminders";
+
+    // A channel's importance cannot be raised after it is created, so a brand new id
+    // is used to guarantee a high-importance alerting channel (heads-up, sound, vibration).
+    public const string ChannelId = "schedule_tiger_alerts_v2";
+    const string ChannelName = "ScheduleTiger reminders";
+    const string ChannelDescription = "Reminders for ScheduleTiger";
+
+    static readonly long[] VibrationPattern = { 0, 400, 200, 400 };
 
     public override void OnReceive(Context? context, Intent? intent)
     {
@@ -23,23 +32,40 @@ public sealed class ReminderNotificationReceiver : BroadcastReceiver
         var title = intent.GetStringExtra(ExtraTitle) ?? "ScheduleTiger reminder";
         var body = intent.GetStringExtra(ExtraBody) ?? string.Empty;
 
+        Show(context, GetNotificationId(reminderId), title, body);
+    }
+
+    // Builds and posts a high-importance, alerting notification on the shared channel.
+    // Shared by scheduled alarms and the immediate "test now" path.
+    public static void Show(Context context, int notificationId, string title, string body)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
         EnsureChannel(context);
+
+        var text = string.IsNullOrWhiteSpace(body) ? title : body;
 
         var notification = new NotificationCompat.Builder(context, ChannelId)
             .SetSmallIcon(global::Android.Resource.Drawable.IcDialogInfo)
-            .SetContentTitle($"ScheduleTiger reminder")
-            .SetContentText(string.IsNullOrWhiteSpace(body) ? title : body)
-            .SetStyle(new NotificationCompat.BigTextStyle().BigText(string.IsNullOrWhiteSpace(body) ? title : body))
+            .SetContentTitle(title)
+            .SetContentText(text)
+            .SetStyle(new NotificationCompat.BigTextStyle().BigText(text))
+            .SetPriority(NotificationCompat.PriorityHigh)
+            .SetCategory(NotificationCompat.CategoryReminder)
+            .SetVisibility(NotificationCompat.VisibilityPublic)
+            .SetDefaults((int)NotificationDefaults.All)
+            .SetVibrate(VibrationPattern)
             .SetAutoCancel(true)
-            .SetPriority((int)NotificationPriority.High)
             .Build();
 
-        var notificationManager = NotificationManagerCompat.From(context);
-        notificationManager.Notify(GetNotificationId(reminderId), notification);
+        NotificationManagerCompat.From(context).Notify(notificationId, notification);
     }
 
-    static void EnsureChannel(Context context)
+    // Creates the shared high-importance channel (default sound + vibration) once.
+    public static void EnsureChannel(Context context)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
         if (!OperatingSystem.IsAndroidVersionAtLeast(26))
         {
             return;
@@ -51,21 +77,41 @@ public sealed class ReminderNotificationReceiver : BroadcastReceiver
             return;
         }
 
-        var channel = new NotificationChannel(ChannelId, "ScheduleTiger reminders", NotificationImportance.Default)
+        var channel = new NotificationChannel(ChannelId, ChannelName, NotificationImportance.High)
         {
-            Description = "Reminders for ScheduleTiger",
+            Description = ChannelDescription,
+            LockscreenVisibility = NotificationVisibility.Public,
         };
+
+        channel.EnableLights(true);
+        channel.EnableVibration(true);
+
+        var soundUri = RingtoneManager.GetDefaultUri(RingtoneType.Notification);
+        if (soundUri is not null)
+        {
+            var audioAttributes = new AudioAttributes.Builder()
+                .SetUsage(AudioUsageKind.Notification)!
+                .SetContentType(AudioContentType.Sonification)!
+                .Build();
+            channel.SetSound(soundUri, audioAttributes);
+        }
 
         manager.CreateNotificationChannel(channel);
     }
 
     static int GetNotificationId(string reminderId)
     {
-        if (string.IsNullOrWhiteSpace(reminderId) || reminderId.Length < 8)
+        if (string.IsNullOrWhiteSpace(reminderId))
         {
-            return reminderId.GetHashCode(StringComparison.Ordinal);
+            return 0;
         }
 
-        return unchecked((int)uint.Parse(reminderId[..8], System.Globalization.NumberStyles.HexNumber));
+        if (reminderId.Length >= 8
+            && uint.TryParse(reminderId.AsSpan(0, 8), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return unchecked((int)parsed);
+        }
+
+        return reminderId.GetHashCode(StringComparison.Ordinal);
     }
 }

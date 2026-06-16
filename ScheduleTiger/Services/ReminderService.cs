@@ -12,6 +12,8 @@ public sealed class ReminderService
     readonly ObservableCollection<ReminderItem> reminders = [];
     bool initialized;
 
+    public string LastNotificationStatus { get; private set; } = string.Empty;
+
     public ReminderService(ReminderStore store, ReminderNotificationService notifications)
     {
         this.store = store;
@@ -19,6 +21,32 @@ public sealed class ReminderService
     }
 
     public ObservableCollection<ReminderItem> Reminders => reminders;
+
+    public bool CanScheduleExactAlarms() => notifications.CanScheduleExactAlarms();
+
+    public Task<bool> RequestNotificationPermissionAsync() => notifications.RequestNotificationPermissionAsync();
+
+    public Task<bool> IsNotificationPermissionGrantedAsync() => notifications.IsNotificationPermissionGrantedAsync();
+
+    public Task OpenAlarmPermissionSettingsAsync() => notifications.OpenAlarmPermissionSettingsAsync();
+
+    public Task OpenNotificationSettingsAsync() => notifications.OpenNotificationSettingsAsync();
+
+    public Task OpenChannelSettingsAsync() => notifications.OpenChannelSettingsAsync();
+
+    public async Task<bool> ScheduleTestNotificationAsync(TimeSpan delay)
+    {
+        var result = await notifications.ScheduleTestNotificationAsync(delay);
+        LastNotificationStatus = notifications.LastNotificationStatus;
+        return result;
+    }
+
+    public async Task<bool> ShowTestNotificationNowAsync()
+    {
+        var result = await notifications.ShowTestNotificationNowAsync();
+        LastNotificationStatus = notifications.LastNotificationStatus;
+        return result;
+    }
 
     public async Task InitializeAsync()
     {
@@ -29,12 +57,11 @@ public sealed class ReminderService
 
         var loaded = await store.LoadAsync();
         UpdateCollection(loaded);
-        await notifications.EnsurePermissionAsync();
         await notifications.RescheduleAsync(reminders);
         initialized = true;
     }
 
-    public async Task<ReminderItem> AddAsync(string title, string? notes, string tag, DateTime dueDateTime)
+    public async Task<(ReminderItem Reminder, bool NotificationScheduled)> AddAsync(string title, string? notes, string tag, DateTime dueDateTime)
     {
         if (string.IsNullOrWhiteSpace(title))
         {
@@ -58,8 +85,8 @@ public sealed class ReminderService
 
         reminders.Add(reminder);
         SortReminders();
-        await SaveAndRescheduleAsync(reminder);
-        return reminder;
+        var notificationScheduled = await SaveAndRescheduleAsync(reminder);
+        return (reminder, notificationScheduled);
     }
 
     public async Task ToggleDoneAsync(ReminderItem reminder)
@@ -104,22 +131,64 @@ public sealed class ReminderService
             return;
         }
 
-        await notifications.CancelAsync(reminder);
+        try
+        {
+            await notifications.CancelAsync(reminder);
+        }
+        catch
+        {
+            // Keep reminder deletion non-fatal.
+        }
+
         await SaveAsync();
     }
 
-    async Task SaveAndRescheduleAsync(ReminderItem reminder)
+    async Task<bool> SaveAndRescheduleAsync(ReminderItem reminder)
     {
         await SaveAsync();
-        await notifications.ScheduleAsync(reminder);
+        bool scheduled;
+        try
+        {
+            scheduled = await notifications.ScheduleAsync(reminder);
+        }
+        catch
+        {
+            scheduled = false;
+            LastNotificationStatus = "Notifications blocked.";
+        }
+
+        if (!scheduled)
+        {
+            LastNotificationStatus = string.IsNullOrWhiteSpace(LastNotificationStatus)
+                ? "Alarm permission still needed"
+                : LastNotificationStatus;
+        }
+
+        return scheduled;
     }
 
     async Task UpdateNotificationAsync(ReminderItem reminder)
     {
-        await notifications.CancelAsync(reminder);
+        try
+        {
+            await notifications.CancelAsync(reminder);
+        }
+        catch
+        {
+            // Keep reminder actions non-fatal.
+            return;
+        }
+
         if (!reminder.IsDone)
         {
-            await notifications.ScheduleAsync(reminder);
+            try
+            {
+                await notifications.ScheduleAsync(reminder);
+            }
+            catch
+            {
+                // Keep reminder actions non-fatal.
+            }
         }
     }
 
