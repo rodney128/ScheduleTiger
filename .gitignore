@@ -9,3 +9,7 @@ obj/
 *_private_signing/
 *.jks
 *.keystore
+
+# Temporary automation/debug artifacts
+schedule_*.png
+window*.xml
